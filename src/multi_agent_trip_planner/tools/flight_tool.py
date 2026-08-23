@@ -68,7 +68,6 @@ def search_flights(query: str, limit: int = 5) -> str:
             AVIATIONSTACK_BASE_URL,
             params=params,
             timeout=30,
-            verify = False
         )
 
         response.raise_for_status()

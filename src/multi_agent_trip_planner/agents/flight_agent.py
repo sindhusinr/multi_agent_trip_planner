@@ -6,16 +6,15 @@ def flight_agent(state: dict) -> dict:
     """
     Flight specialist agent.
 
-    Takes user query from state,
-    retrieves flight information,
-    stores result back into state.
+    Retrieves flight information
+    relevant to the travel request.
     """
 
-    flights = search_flights(state["user_query"])
+    flight_results = search_flights(state["user_query"])
 
     return {
-        "flight_results": flights,
+        "flight_results": flight_results,
         "messages": [
-            AIMessage(content="Flight information generated.")
+            AIMessage(content="Flight recommendations generated.")
         ]
     }
