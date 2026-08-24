@@ -85,6 +85,3 @@ def search_flights(query: str, limit: int = 5) -> str:
         format_flight(flight)
         for flight in flights[:limit]
     )
-
-if __name__ == "__main__":
-    print(search_flights("Plan a 7 day Japan trip from Chennai"))
