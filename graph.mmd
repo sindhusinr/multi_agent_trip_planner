@@ -9,13 +9,30 @@ graph TD;
 	flight_agent(flight_agent)
 	hotel_agent(hotel_agent)
 	weather_agent(weather_agent)
+	budget_agent(budget_agent)
 	itinerary_agent(itinerary_agent)
 	__end__([<p>__end__</p>]):::last
 	__start__ --> supervisor;
-	flight_agent --> hotel_agent;
-	hotel_agent --> weather_agent;
-	supervisor --> flight_agent;
-	weather_agent --> itinerary_agent;
+	budget_agent -.-> __end__;
+	budget_agent -.-> itinerary_agent;
+	flight_agent -.-> __end__;
+	flight_agent -.-> budget_agent;
+	flight_agent -.-> hotel_agent;
+	flight_agent -.-> itinerary_agent;
+	flight_agent -.-> weather_agent;
+	hotel_agent -.-> __end__;
+	hotel_agent -.-> budget_agent;
+	hotel_agent -.-> itinerary_agent;
+	hotel_agent -.-> weather_agent;
+	supervisor -.-> __end__;
+	supervisor -.-> budget_agent;
+	supervisor -.-> flight_agent;
+	supervisor -.-> hotel_agent;
+	supervisor -.-> itinerary_agent;
+	supervisor -.-> weather_agent;
+	weather_agent -.-> __end__;
+	weather_agent -.-> budget_agent;
+	weather_agent -.-> itinerary_agent;
 	itinerary_agent --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0

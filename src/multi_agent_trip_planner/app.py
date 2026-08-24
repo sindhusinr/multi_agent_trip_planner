@@ -1,4 +1,8 @@
 from multi_agent_trip_planner.graph.travel_graph import travel_graph
+#to write
+mermaid = travel_graph.get_graph().draw_mermaid()
+with open("graph.mmd", "w") as f:
+    f.write(mermaid)
 user_query = input("Question: ")
 state = {
     "user_query": user_query,

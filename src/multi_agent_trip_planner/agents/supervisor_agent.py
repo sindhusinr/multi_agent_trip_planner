@@ -28,7 +28,7 @@ def supervisor_agent(state: dict) -> dict:
     Responsibilities:
     - Understand user intent
     - Select required agents
-    - Extract trip details
+    - Extract structured trip details
     """
 
     prompt = f"""
@@ -41,7 +41,7 @@ Available agents:
 - budget_agent
 - itinerary_agent
 
-Rules:
+Agent Selection Rules:
 
 1. Full trip planning requests should include:
    - flight_agent
@@ -63,21 +63,50 @@ Rules:
 
 6. Include itinerary_agent ONLY when a complete trip plan is requested.
 
-Return VALID JSON only.
+Trip Detail Extraction Rules:
 
-Schema:
+- Always extract trip_details.
+- Never leave primary_city empty when destination is known.
+- primary_city should be the main city used for flight
+  and weather lookups.
+
+Examples:
+
+Japan -> Tokyo
+France -> Paris
+Thailand -> Bangkok
+Singapore -> Singapore
+UAE -> Dubai
+Italy -> Rome
+Germany -> Berlin
+
+If a city is explicitly mentioned:
+
+Tokyo -> Tokyo
+Kyoto -> Kyoto
+Osaka -> Osaka
+Chennai -> Chennai
+
+Return VALID JSON ONLY.
+
+Example Output:
 
 {{
-  "selected_agents": [],
-  "reasoning": "",
-  "trip_details": {{
-      "origin": "",
-      "destination": "",
-      "primary_city": "",
-      "duration": "",
-      "budget": "",
-      "travel_style": ""
-  }}
+    "selected_agents": [
+        "flight_agent",
+        "hotel_agent",
+        "weather_agent",
+        "itinerary_agent"
+    ],
+    "reasoning": "User requested a complete trip plan.",
+    "trip_details": {{
+        "origin": "Chennai",
+        "destination": "Japan",
+        "primary_city": "Tokyo",
+        "duration": "7 days",
+        "budget": "",
+        "travel_style": ""
+    }}
 }}
 
 User Query:
@@ -87,7 +116,10 @@ User Query:
     try:
         response = llm.invoke([
             SystemMessage(
-                content="Return valid JSON only. No markdown."
+                content=(
+                    "Return only valid JSON. "
+                    "Do not wrap in markdown."
+                )
             ),
             HumanMessage(content=prompt)
         ])
@@ -97,10 +129,43 @@ User Query:
         print("\n>>> SUPERVISOR")
         print(result)
 
+        trip_details = result.get("trip_details", {})
+
         return {
-            "selected_agents": result.get("selected_agents", []),
-            "supervisor_reasoning": result.get("reasoning", ""),
-            "trip_details": result.get("trip_details", {})
+            "selected_agents": result.get(
+                "selected_agents",
+                []
+            ),
+            "supervisor_reasoning": result.get(
+                "reasoning",
+                ""
+            ),
+            "trip_details": {
+                "origin": trip_details.get(
+                    "origin",
+                    ""
+                ),
+                "destination": trip_details.get(
+                    "destination",
+                    ""
+                ),
+                "primary_city": trip_details.get(
+                    "primary_city",
+                    ""
+                ),
+                "duration": trip_details.get(
+                    "duration",
+                    ""
+                ),
+                "budget": trip_details.get(
+                    "budget",
+                    ""
+                ),
+                "travel_style": trip_details.get(
+                    "travel_style",
+                    ""
+                )
+            }
         }
 
     except Exception as e:
@@ -110,7 +175,9 @@ User Query:
 
         return {
             "selected_agents": FALLBACK_AGENTS,
-            "supervisor_reasoning": f"Fallback routing used: {e}",
+            "supervisor_reasoning": (
+                f"Fallback routing used: {e}"
+            ),
             "trip_details": {
                 "origin": "",
                 "destination": "",
