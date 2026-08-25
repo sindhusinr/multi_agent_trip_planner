@@ -39,4 +39,8 @@ def route_after(current_agent):
 
     return router
 
+def route_after_guardrail(state):
+    if state.get("allowed"):
+        return "supervisor"
 
+    return END

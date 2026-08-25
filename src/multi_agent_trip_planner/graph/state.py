@@ -8,7 +8,8 @@ class TravelState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], operator.add]
 
     user_query: str
-
+    allowed: bool
+    guardrail_reason: str
     trip_details: dict[str, Any]
 
     selected_agents: list[str]

@@ -5,6 +5,7 @@ config:
 ---
 graph TD;
 	__start__([<p>__start__</p>]):::first
+	guardrail(guardrail)
 	supervisor(supervisor)
 	flight_agent(flight_agent)
 	hotel_agent(hotel_agent)
@@ -12,7 +13,7 @@ graph TD;
 	budget_agent(budget_agent)
 	itinerary_agent(itinerary_agent)
 	__end__([<p>__end__</p>]):::last
-	__start__ --> supervisor;
+	__start__ --> guardrail;
 	budget_agent -.-> __end__;
 	budget_agent -.-> itinerary_agent;
 	flight_agent -.-> __end__;
@@ -20,6 +21,8 @@ graph TD;
 	flight_agent -.-> hotel_agent;
 	flight_agent -.-> itinerary_agent;
 	flight_agent -.-> weather_agent;
+	guardrail -.-> __end__;
+	guardrail -.-> supervisor;
 	hotel_agent -.-> __end__;
 	hotel_agent -.-> budget_agent;
 	hotel_agent -.-> itinerary_agent;
