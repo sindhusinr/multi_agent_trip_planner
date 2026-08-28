@@ -1,50 +1,27 @@
-import os
-from dotenv import load_dotenv
-from langchain_tavily import TavilySearch
+import asyncio
 
-load_dotenv()
-
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
-
-if not TAVILY_API_KEY:
-    raise ValueError("TAVILY_API_KEY not found in .env file")
-
-
-tavily_search_tool = TavilySearch(
-    max_results=5,
-    tavily_api_key=TAVILY_API_KEY
+from multi_agent_trip_planner.mcp.mcp_client import (
+    get_mcp_tools
 )
 
 
-def tavily_search(query: str) -> str:
-    """
-    Search the web using Tavily and return formatted results.
-    """
+async def tavily_search(query: str) -> str:
 
-    try:
-        response = tavily_search_tool.invoke(query)
+    # Discover tools exposed by Tavily MCP
+    tools = await get_mcp_tools()
 
-        results = []
+    # Select tavily_search tool
+    search_tool = next(
+        tool
+        for tool in tools
+        if tool.name == "tavily_search"
+    )
 
-        for i, result in enumerate(response["results"], start=1):
-            title = result.get("title", "No Title")
-            url = result.get("url", "")
-            content = result.get("content", "")
+    # Execute search through remote MCP
+    result = await search_tool.ainvoke(
+        {
+            "query": query
+        }
+    )
 
-            if len(content) > 300:
-                content = content[:300] + "..."
-
-            results.append(
-                f"{i}. {title}\n"
-                f"URL: {url}\n"
-                f"{content}"
-            )
-
-        return "\n\n".join(results)
-
-    except Exception as e:
-        return f"Tavily search failed: {e}"
-
-
-if __name__ == "__main__":
-    print(tavily_search("Best hotels in Tokyo"))
+    return str(result)
