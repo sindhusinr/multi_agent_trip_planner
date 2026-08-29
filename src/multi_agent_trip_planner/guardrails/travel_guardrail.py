@@ -1,20 +1,41 @@
-from multi_agent_trip_planner.guardrails.constants import (
-    TRAVEL_KEYWORDS,
-    BLOCKED_KEYWORDS,
-)
-
-
-def validate_query(query: str) -> dict:
-    """
-    Validate whether the query should enter
-    the travel planning workflow.
-    """
+def validate_query(
+    query: str,
+    trip_details: dict | None = None
+) -> dict:
 
     query_lower = query.lower()
 
-    # Prompt injection checks
-    for pattern in BLOCKED_KEYWORDS:
+    blocked_keywords = [
+        "ignore previous instructions",
+        "ignore all instructions",
+        "system prompt",
+        "developer prompt",
+        "reveal prompt",
+        "show hidden prompt",
+        "jailbreak",
+        "bypass guardrails",
+        "override instructions",
+        "forget previous instructions",
+    ]
+
+    travel_keywords = [
+        "trip",
+        "travel",
+        "vacation",
+        "holiday",
+        "itinerary",
+        "flight",
+        "hotel",
+        "visit",
+        "tour",
+        "destination",
+    ]
+
+    # Security checks always run first
+    for pattern in blocked_keywords:
+
         if pattern in query_lower:
+
             return {
                 "allowed": False,
                 "reason": (
@@ -22,11 +43,22 @@ def validate_query(query: str) -> dict:
                 )
             }
 
-    # Travel domain check
+    # Existing trip context exists
+    if trip_details:
+
+        return {
+            "allowed": True,
+            "reason": (
+                "Follow-up trip request."
+            )
+        }
+
+    # First message must be travel related
     if not any(
         keyword in query_lower
-        for keyword in TRAVEL_KEYWORDS
+        for keyword in travel_keywords
     ):
+
         return {
             "allowed": False,
             "reason": (

@@ -4,10 +4,14 @@ from multi_agent_trip_planner.guardrails.travel_guardrail import (
 
 
 def guardrail_agent(state: dict) -> dict:
+
     print(">>> GUARDRAIL")
 
     result = validate_query(
-        state["user_query"]
+        query=state["user_query"],
+        trip_details=state.get(
+            "trip_details"
+        )
     )
 
     return {
