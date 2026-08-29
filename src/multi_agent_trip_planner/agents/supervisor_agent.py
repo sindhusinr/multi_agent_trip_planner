@@ -16,10 +16,8 @@ llm = ChatGroq(
 )
 
 FALLBACK_AGENTS = [
-    "flight_agent",
     "hotel_agent",
     "weather_agent",
-    "budget_agent",
     "itinerary_agent"
 ]
 
@@ -29,12 +27,13 @@ def supervisor_agent(state: dict) -> dict:
     Main orchestration agent.
 
     Responsibilities:
-    - Detect new trip requests
+    - Detect new trips
     - Detect trip modifications
+    - Extract trip details
     - Select required agents
-    - Extract structured trip details
     """
 
+    # Previously stored trip details
     current_trip = state.get(
         "trip_details",
         {}
@@ -43,7 +42,7 @@ def supervisor_agent(state: dict) -> dict:
     prompt = f"""
 You are the supervisor of a multi-agent travel planning system.
 
-Available agents:
+Available Agents:
 
 - flight_agent
 - hotel_agent
@@ -55,95 +54,146 @@ Current Trip Details:
 
 {json.dumps(current_trip, indent=2)}
 
-You may receive either:
+Tasks:
 
-1. A brand new trip request
-2. A modification to an existing trip
+1. Determine action:
+   - create_trip
+   - modify_trip
 
-Determine the action:
+2. Extract trip details.
 
-- create_trip
-- modify_trip
+3. Select only the required agents.
 
-If trip details already exist:
+Trip Update Rules:
 
-- Preserve existing values
-- Update only fields explicitly changed
-  by the user
+- Preserve existing values.
+- Update only fields explicitly mentioned.
+- Always return trip_details.
+
+Flight Rules:
+
+DO NOT select flight_agent unless BOTH
+origin and destination are known.
 
 Examples:
 
-Current Trip:
-{{
-  "destination": "Japan",
-  "primary_city": "Tokyo",
-  "duration": "5 days",
-  "budget": ""
-}}
+Origin: Chennai
+Destination: Empty
+
+Selected Agents:
+[]
+
+Origin: Empty
+Destination: Singapore
+
+Selected Agents:
+[
+    "hotel_agent",
+    "weather_agent",
+    "itinerary_agent"
+]
+
+Origin: Chennai
+Destination: Singapore
+
+Selected Agents:
+[
+    "flight_agent",
+    "hotel_agent",
+    "weather_agent",
+    "itinerary_agent"
+]
 
 User:
-Increase budget to 2 lakhs
+Flights from Chennai to Singapore
 
-Result:
-{{
-  "action": "modify_trip",
-  "trip_details": {{
-    "destination": "Japan",
-    "primary_city": "Tokyo",
-    "duration": "5 days",
-    "budget": "2 lakhs"
-  }}
-}}
+Selected Agents:
+[
+    "flight_agent"
+]
 
-User:
-Add Kyoto
+Important:
 
-Result:
-{{
-  "action": "modify_trip",
-  "trip_details": {{
-    "destination": "Japan",
-    "primary_city": "Tokyo",
-    "duration": "5 days",
-    "budget": "",
-    "additional_city": "Kyoto"
-  }}
-}}
+If either origin or destination is missing:
+
+- Do not select flight_agent.
+- Wait for the user to provide the
+  missing location.
 
 Agent Selection Rules:
 
-1. Full trip planning requests:
+Full Trip Planning:
 
-   - flight_agent
-   - hotel_agent
-   - weather_agent
-   - itinerary_agent
+- hotel_agent
+- weather_agent
+- itinerary_agent
 
-2. Weather only:
+Add flight_agent only if Flight Rules match.
 
-   - weather_agent
+Weather Only:
 
-3. Hotel only:
+- weather_agent
 
-   - hotel_agent
+Hotel Only:
 
-4. Flight only:
+- hotel_agent
 
-   - flight_agent
+Flight Only:
 
-5. Budget change:
+- flight_agent
 
-   - budget_agent
+Budget Change:
 
-6. Itinerary modifications:
+- budget_agent
 
-   - itinerary_agent
+Itinerary Change:
 
-Trip Detail Extraction Rules:
+- itinerary_agent
 
-- Always return trip_details
-- Never leave primary_city empty
-  when destination is known
+Trip Detail Rules:
+
+- Always return trip_details.
+- Never leave primary_city empty when
+  destination is known.
+- If destination is a city,
+  use that city as primary_city.
+
+Location Extraction Rules:
+
+- If the user says "from X",
+  store X as origin.
+
+- If the user says "to X",
+  store X as destination.
+
+- If only one location is mentioned
+  and no origin is specified,
+  treat it as destination.
+
+Examples:
+
+Plan a trip to Chennai
+
+origin = ""
+destination = "Chennai"
+primary_city = "Chennai"
+
+Plan a trip from Chennai
+
+origin = "Chennai"
+destination = ""
+
+Plan a trip from Chennai to Japan
+
+origin = "Chennai"
+destination = "Japan"
+primary_city = "Tokyo"
+
+Flights from Bangalore to Chennai
+
+origin = "Bangalore"
+destination = "Chennai"
+primary_city = "Chennai"
 
 Country Mapping:
 
@@ -157,24 +207,20 @@ Germany -> Berlin
 
 Return VALID JSON ONLY.
 
-Example:
+Expected Format:
 
 {{
     "action": "create_trip",
-    "selected_agents": [
-        "flight_agent",
-        "hotel_agent",
-        "weather_agent",
-        "itinerary_agent"
-    ],
-    "reasoning": "Complete trip planning request.",
+    "selected_agents": [],
+    "reasoning": "",
     "trip_details": {{
-        "origin": "Chennai",
-        "destination": "Japan",
-        "primary_city": "Tokyo",
-        "duration": "7 days",
+        "origin": "",
+        "destination": "",
+        "primary_city": "",
+        "duration": "",
         "budget": "",
-        "travel_style": ""
+        "travel_style": "",
+        "additional_city": ""
     }}
 }}
 
@@ -193,7 +239,9 @@ User Query:
                         "Do not use markdown."
                     )
                 ),
-                HumanMessage(content=prompt)
+                HumanMessage(
+                    content=prompt
+                )
             ]
         )
 
@@ -209,6 +257,60 @@ User Query:
             {}
         )
 
+        # Preserve previous values when
+        # the current request omits them
+        merged_trip = {
+            "origin": (
+                trip_details.get("origin")
+                or current_trip.get(
+                    "origin",
+                    ""
+                )
+            ),
+            "destination": (
+                trip_details.get("destination")
+                or current_trip.get(
+                    "destination",
+                    ""
+                )
+            ),
+            "primary_city": (
+                trip_details.get("primary_city")
+                or current_trip.get(
+                    "primary_city",
+                    ""
+                )
+            ),
+            "duration": (
+                trip_details.get("duration")
+                or current_trip.get(
+                    "duration",
+                    ""
+                )
+            ),
+            "budget": (
+                trip_details.get("budget")
+                or current_trip.get(
+                    "budget",
+                    ""
+                )
+            ),
+            "travel_style": (
+                trip_details.get("travel_style")
+                or current_trip.get(
+                    "travel_style",
+                    ""
+                )
+            ),
+            "additional_city": (
+                trip_details.get("additional_city")
+                or current_trip.get(
+                    "additional_city",
+                    ""
+                )
+            )
+        }
+
         return {
             "action": result.get(
                 "action",
@@ -222,62 +324,15 @@ User Query:
                 "reasoning",
                 ""
             ),
-            "trip_details": {
-                "origin": trip_details.get(
-                    "origin",
-                    current_trip.get(
-                        "origin",
-                        ""
-                    )
-                ),
-                "destination": trip_details.get(
-                    "destination",
-                    current_trip.get(
-                        "destination",
-                        ""
-                    )
-                ),
-                "primary_city": trip_details.get(
-                    "primary_city",
-                    current_trip.get(
-                        "primary_city",
-                        ""
-                    )
-                ),
-                "duration": trip_details.get(
-                    "duration",
-                    current_trip.get(
-                        "duration",
-                        ""
-                    )
-                ),
-                "budget": trip_details.get(
-                    "budget",
-                    current_trip.get(
-                        "budget",
-                        ""
-                    )
-                ),
-                "travel_style": trip_details.get(
-                    "travel_style",
-                    current_trip.get(
-                        "travel_style",
-                        ""
-                    )
-                ),
-                "additional_city": trip_details.get(
-                    "additional_city",
-                    current_trip.get(
-                        "additional_city",
-                        ""
-                    )
-                )
-            }
+            "trip_details": merged_trip
         }
 
     except Exception as e:
 
-        print("\n>>> SUPERVISOR FALLBACK")
+        print(
+            "\n>>> SUPERVISOR FALLBACK"
+        )
+
         print(e)
 
         return {

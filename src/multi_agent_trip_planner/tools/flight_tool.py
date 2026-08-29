@@ -9,8 +9,6 @@ This module is responsible for:
 
 Used by:
 - Flight Agent
-- Budget Agent (future)
-- Itinerary Agent (future)
 """
 
 import os
@@ -129,13 +127,4 @@ def search_flights(
     return "\n\n".join(
         format_flight(flight)
         for flight in flights[:limit]
-    )
-
-
-if __name__ == "__main__":
-    print(
-        search_flights(
-            "MAA",
-            "NRT"
-        )
     )
