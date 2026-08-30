@@ -23,6 +23,42 @@ def itinerary_agent(state: dict) -> dict:
         {}
     )
 
+    flight_results = state.get(
+        "flight_results",
+        ""
+    )
+
+    hotel_results = state.get(
+        "hotel_results",
+        ""
+    )
+
+    weather_results = state.get(
+        "weather_results",
+        ""
+    )
+
+    duration = trip_details.get(
+        "duration",
+        ""
+    )
+
+    # =========================================================================
+    # WHY:
+    # We do not want the itinerary model to guess
+    # airlines, airports, routes or flight durations
+    # when Flight Agent failed.
+    # =========================================================================
+    flight_available = True
+
+    if (
+        not flight_results
+        or "No flights found" in flight_results
+        or "Unable to find airport code" in flight_results
+        or "Flight API error" in flight_results
+    ):
+        flight_available = False
+
     prompt = f"""
 Create a travel itinerary.
 
@@ -30,57 +66,152 @@ Trip Details:
 
 {trip_details}
 
-Transportation Rules:
-
-- Do not assume flights.
-- Do not invent an origin city.
-- Do not invent a destination.
-- Only include flight information when
-  flight_results are available.
-- If origin is empty, do not mention
-  departure airports or flights.
-- If destination is a city, build the
-  itinerary around that city.
-- If destination is a country, use
-  primary_city for recommendations.
-
 User Request:
 
 {state["user_query"]}
 
+Flight Available:
+
+{flight_available}
+
+Duration Value:
+
+{duration}
+
 Flight Information:
 
-{state.get("flight_results", "")}
+{flight_results}
 
 Hotel Information:
 
-{state.get("hotel_results", "")}
+{hotel_results}
 
 Weather Information:
 
-{state.get("weather_results", "")}
+{weather_results}
+
+Transportation Rules:
+
+- Do not assume flights.
+- Do not invent origin cities.
+- Do not invent destination cities.
+- Use only information explicitly provided.
+- If destination is a country,
+  use primary_city.
+
+Flight Rules:
+
+IF Flight Available = False
+
+THEN:
+
+- State:
+  "Flight information is currently unavailable."
+
+- Do NOT mention:
+  - airlines
+  - airports
+  - airport transfers
+  - flight durations
+  - layovers
+  - ticket prices
+  - suggested flight routes
+
+- Do NOT mention:
+  Narita
+  Haneda
+  Singapore Airlines
+  Emirates
+  Air India
+  ANA
+  JAL
+
+- Do NOT create transportation
+  recommendations related to flights.
+
+IF Flight Available = True
+
+THEN:
+
+- Use only information contained
+  in Flight Information.
+- Do not invent additional
+  flight details.
+
+Duration Rules:
+
+IF Duration Value is empty
+
+THEN:
+
+- Do NOT create:
+  Day 1
+  Day 2
+  Day 3
+  Day 4
+  Day 5
+
+- Do NOT assume:
+  3 days
+  5 days
+  7 days
+  1 week
+
+- Create:
+
+  Suggested Activities
+  Morning Ideas
+  Afternoon Ideas
+  Evening Ideas
+
+- Clearly state:
+
+  "Trip duration was not provided."
+
+IF Duration Value is present
+
+THEN:
+
+- Create a day-by-day itinerary
+  matching the provided duration.
+
+Hotel Rules:
+
+- Use hotels only from
+  Hotel Information.
+- Never invent hotels.
+- Never invent hotel pricing.
+
+Weather Rules:
+
+- Use weather only from
+  Weather Information.
+- Never invent forecasts.
 
 Generate:
 
 1. Trip Summary
 2. Transportation Recommendations
 3. Hotel Recommendation
-4. Suggested Day-by-Day Plan
+4. Suggested Activities
 5. Travel Tips
 
 Important:
 
-- Never create fictional flight routes.
-- Never create departure cities.
-- Never assume the traveler starts
-  from Mumbai, Delhi, Chennai,
-  Bangalore, or any other city.
-- If flight information is unavailable,
-  omit the Flight Recommendation section.
-- Keep recommendations aligned with
-  the provided destination only.
+- Never invent transportation.
+- Never invent routes.
+- Never invent airlines.
+- Never invent airports.
+- Never invent schedules.
+- Never invent prices.
+- Never invent weather.
+- Never invent hotels.
 
-Keep the response practical and easy to read.
+- If information is unavailable,
+  explicitly say it is unavailable.
+
+Keep the response realistic,
+practical and easy to read.
 """
 
     response = llm.invoke(

@@ -11,7 +11,7 @@ langgraph-checkpoint-postgres
 python-dotenv
 requests
 certifi
-
+pydantic
 tavily-python
 
 airportsdata
@@ -24,3 +24,4 @@ jinja2
 langchain-mcp-adapters
 mcp
 nest_asyncio
+streamlit

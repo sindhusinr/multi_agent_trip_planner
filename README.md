@@ -4,3 +4,5 @@
 python src/multi_agent_trip_planner/tools/tavily_tool.py
 
 uv add -r requirements.txt
+
+streamlit run src/multi_agent_trip_planner/ui/streamlit.py

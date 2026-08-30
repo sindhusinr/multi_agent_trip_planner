@@ -1,18 +1,67 @@
 import json
 import os
+from typing import List, Literal
 
 from dotenv import load_dotenv
-from langchain_core.messages import (
-    HumanMessage,
-    SystemMessage,
-)
+from langchain_core.messages import HumanMessage
 from langchain_groq import ChatGroq
+from pydantic import BaseModel
+
+
+# ============================================================================
+# SUPERVISOR OUTPUT SCHEMA
+# ============================================================================
+# WHY:
+# Previously the supervisor returned raw JSON text.
+#
+# Problems:
+# - Invalid JSON
+# - Extra markdown
+# - Missing fields
+# - json.loads() failures
+#
+# Structured output validates responses before
+# they reach the application logic.
+# ============================================================================
+
+class TripDetails(BaseModel):
+    origin: str = ""
+    destination: str = ""
+    primary_city: str = ""
+    duration: str = ""
+    budget: str = ""
+    travel_style: str = ""
+    additional_city: str = ""
+
+
+class SupervisorOutput(BaseModel):
+    action: Literal[
+        "create_trip",
+        "modify_trip"
+    ]
+    selected_agents: List[str]
+    reasoning: str = ""
+    trip_details: TripDetails
+
 
 load_dotenv()
 
 llm = ChatGroq(
     model=os.getenv("LLM_MODEL"),
     api_key=os.getenv("GROQ_API_KEY")
+)
+
+# WHY:
+# LangChain converts the model response
+# directly into a validated Pydantic object.
+#
+# Benefits:
+# - No json.loads()
+# - No malformed JSON
+# - Type-safe access
+# - More reliable routing decisions
+structured_llm = llm.with_structured_output(
+    SupervisorOutput
 )
 
 FALLBACK_AGENTS = [
@@ -205,25 +254,6 @@ UAE -> Dubai
 Italy -> Rome
 Germany -> Berlin
 
-Return VALID JSON ONLY.
-
-Expected Format:
-
-{{
-    "action": "create_trip",
-    "selected_agents": [],
-    "reasoning": "",
-    "trip_details": {{
-        "origin": "",
-        "destination": "",
-        "primary_city": "",
-        "duration": "",
-        "budget": "",
-        "travel_style": "",
-        "additional_city": ""
-    }}
-}}
-
 User Query:
 
 {state["user_query"]}
@@ -231,34 +261,36 @@ User Query:
 
     try:
 
-        response = llm.invoke(
+        # WHY:
+        # Response is automatically validated
+        # against SupervisorOutput schema.
+        result = structured_llm.invoke(
             [
-                SystemMessage(
-                    content=(
-                        "Return only valid JSON. "
-                        "Do not use markdown."
-                    )
-                ),
                 HumanMessage(
                     content=prompt
                 )
             ]
         )
 
-        result = json.loads(
-            response.content
-        )
-
         print("\n>>> SUPERVISOR")
-        print(result)
+        print(result.model_dump())
 
-        trip_details = result.get(
-            "trip_details",
-            {}
+        # Convert Pydantic object into dict
+        # for LangGraph state storage.
+        trip_details = (
+            result.trip_details.model_dump()
         )
 
-        # Preserve previous values when
-        # the current request omits them
+        # WHY:
+        # Users usually provide trip details
+        # across multiple messages.
+        #
+        # Example:
+        # "Trip to Japan"
+        # "Budget 1 lakh"
+        #
+        # Preserve previous values if they
+        # are not provided in the current turn.
         merged_trip = {
             "origin": (
                 trip_details.get("origin")
@@ -296,14 +328,18 @@ User Query:
                 )
             ),
             "travel_style": (
-                trip_details.get("travel_style")
+                trip_details.get(
+                    "travel_style"
+                )
                 or current_trip.get(
                     "travel_style",
                     ""
                 )
             ),
             "additional_city": (
-                trip_details.get("additional_city")
+                trip_details.get(
+                    "additional_city"
+                )
                 or current_trip.get(
                     "additional_city",
                     ""
@@ -312,18 +348,9 @@ User Query:
         }
 
         return {
-            "action": result.get(
-                "action",
-                "create_trip"
-            ),
-            "selected_agents": result.get(
-                "selected_agents",
-                []
-            ),
-            "supervisor_reasoning": result.get(
-                "reasoning",
-                ""
-            ),
+            "action": result.action,
+            "selected_agents": result.selected_agents,
+            "supervisor_reasoning": result.reasoning,
             "trip_details": merged_trip
         }
 
