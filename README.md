@@ -44,41 +44,7 @@ The application also maintains trip information across conversational turns usin
 ## Architecture
 
 The application follows a supervisor-based multi-agent architecture.
-
-                         User
-                           |
-                           v
-                    +-------------+
-                    |  Guardrail  |
-                    +-------------+
-                           |
-                    Allowed Request?
-                      /           \
-                    No             Yes
-                    |               |
-                    v               v
-                   END        +-------------+
-                              | Supervisor  |
-                              +-------------+
-                                    |
-                         Select Required Agents
-                                    |
-             +----------------------+----------------------+
-             |          |            |          |          |
-             v          v            v          v          v
-        +--------+ +--------+ +----------+ +--------+ +------------+
-        | Flight | | Hotel  | | Weather  | | Budget | | Itinerary  |
-        | Agent  | | Agent  | |  Agent   | | Agent  | |   Agent    |
-        +--------+ +--------+ +----------+ +--------+ +------------+
-             |          |           |          |          |
-             v          v           v          v          v
-        AviationStack  Tavily    OpenWeather  Analysis   Groq LLM
-             |          |           |          |          |
-             +----------+-----------+----------+----------+
-                                    |
-                                    v
-                              Final Response
-
+<img width="1536" height="1024" alt="trip_planner" src="https://github.com/user-attachments/assets/f7a41f73-0393-472f-9180-9515eb1bf0a0" />
 
 ## 🏗️ Architecture Overview
 
