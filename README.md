@@ -71,8 +71,21 @@ The application follows a supervisor-based multi-agent architecture.
 
 ## Tech Stack
 
-**Python · LangGraph · LangChain · Groq · Pydantic · PostgreSQL · MCP · Tavily · AviationStack · OpenWeather · Streamlit · uv**
+**Python · LangGraph · LangChain · Groq · Pydantic · PostgreSQL · MCP · Tavily · AviationStack · OpenWeather · Streamlit · uv · LangSmith**
 
+## Observability
+
+**LangSmith** can be enabled for tracing and monitoring LangChain/LangGraph executions.
+
+Configure the following variables in `.env`:
+
+```env
+LANGSMITH_TRACING=true
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+LANGSMITH_API_KEY=your_langsmith_api_key
+LANGSMITH_PROJECT=multi-agent-trip-planner
+```
+When enabled, LangSmith provides visibility into agent execution, LLM calls, and LangGraph runs.
 ## 🚀 Setup
 
 ### Prerequisites
@@ -82,7 +95,7 @@ Before running the application, ensure the following are installed and configure
 - Python 3.13+
 - PostgreSQL
 - UV Package Manager
-- Required API Keys (OpenAI, Tavily, AviationStack, Weather API)
+- Required API Keys (Groq, Tavily, AviationStack, OpenWeather)
 
 ---
 
