@@ -76,8 +76,13 @@ If Duration is provided:
 - Create a day-by-day itinerary.
 - Match the itinerary to the provided duration.
 - Organize activities into morning,
-  afternoon and evening where appropriate.
+  afternoon and evening.
 - Keep nearby activities together when possible.
+- Do not generate exact opening hours,
+  event schedules or reservation times.
+- Avoid exact clock-time schedules unless
+  explicitly provided in the input.
+- Treat activities as suggestions, not confirmed bookings.
 
 If Duration is not provided:
 

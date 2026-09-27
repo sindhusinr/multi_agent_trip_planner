@@ -1,4 +1,5 @@
 import os
+
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from langchain_groq import ChatGroq
@@ -10,15 +11,27 @@ llm = ChatGroq(
     api_key=os.getenv("GROQ_API_KEY")
 )
 
+
 def final_response_agent(state: dict) -> dict:
-    selected_agents = state.get("selected_agents", [])
-    trip_details = state.get("trip_details", {})
+    """
+    Build the final response using only grounded state data.
+    """
+
+    selected_agents = state.get(
+        "selected_agents",
+        []
+    )
+
+    trip_details = state.get(
+        "trip_details",
+        {}
+    )
 
     prompt = f"""
 You are the final response agent for a travel planning application.
 
-Your job is to create ONE clean user-facing response from the results
-produced by specialist agents.
+Your responsibility is ONLY to organize, summarize and format
+information already produced by the system.
 
 User Request:
 {state.get("user_query", "")}
@@ -44,49 +57,88 @@ Budget Results:
 Itinerary:
 {state.get("itinerary", "")}
 
-RULES:
+GROUNDING RULES:
 
-1. Answer only what is relevant to the user's request.
-2. Do not expose internal agent names, routing, state or reasoning.
-3. Do not invent flights, hotels, prices, weather or trip details.
-4. Use only information available in the provided results.
-5. Do not repeat the same information in multiple sections.
-6. If information is unavailable, say so briefly.
-7. Keep simple requests concise.
-8. Use a detailed response only when the user requested trip planning.
+1. Use ONLY facts explicitly present in:
+   - Trip Details
+   - Flight Results
+   - Hotel Results
+   - Weather Results
+   - Budget Results
+   - Itinerary
 
-FORMATTING:
+2. Do NOT add facts from your own knowledge.
 
-For a weather-only request:
-- Location
-- Current weather details
-- Brief practical note
+3. Do NOT invent or infer:
+   - dates
+   - return dates
+   - prices
+   - exchange rates
+   - weather
+   - flights
+   - hotels
+   - transportation
+   - visa information
+   - safety advice
+   - tipping advice
+   - SIM or connectivity advice
+   - booking information
 
-For a flight-only request:
-- Route
-- Available flight information
+4. Do not calculate missing values unless the calculated
+   value is explicitly present in the provided results.
 
-For a hotel-only request:
-- Destination
-- Hotel recommendations
+5. If a result has success=False, briefly explain the
+   provided error. Do not replace it with your own answer.
+
+6. Preserve currencies exactly as returned by the provider.
+   Do not perform currency conversion.
+
+7. Do not expose:
+   - agent names
+   - routing
+   - internal state
+   - internal reasoning
+
+8. Do not repeat information.
+
+9. Do not add generic travel tips.
+
+10. The Itinerary may contain activity suggestions.
+    Present those suggestions as provided, but do not add
+    additional places, restaurants or activities.
+
+RESPONSE RULES:
+
+For a simple request:
+- Answer only the requested information.
+- Keep the response concise.
 
 For a complete trip-planning request:
+Include only relevant sections that contain information:
+
 - Trip Overview
 - Flights
 - Stay
 - Weather
 - Budget
 - Itinerary
-- Travel Notes
 
-Only include sections for information that is relevant and available.
+If a section has no information and was not requested,
+omit it.
+
+If requested information is unavailable,
+state that briefly.
 
 Return only the final user-facing response.
 """
 
-    response = llm.invoke([
-        HumanMessage(content=prompt)
-    ])
+    response = llm.invoke(
+        [
+            HumanMessage(
+                content=prompt
+            )
+        ]
+    )
 
     return {
         "final_response": response.content

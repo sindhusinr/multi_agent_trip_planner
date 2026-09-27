@@ -3,223 +3,127 @@ from langchain_core.messages import AIMessage
 
 def budget_agent(state: dict) -> dict:
     """
-    Budget analysis specialist.
-
-    Reviews trip affordability using
-    available trip details and agent outputs.
+    Calculate trip costs using available structured results.
     """
 
-    trip_details = state.get(
-        "trip_details",
-        {}
-    )
+    print("\n>>> BUDGET AGENT")
 
-    destination = trip_details.get(
-        "destination",
-        ""
-    )
+    trip_details = state.get("trip_details", {})
+    flight_results = state.get("flight_results", {})
+    hotel_results = state.get("hotel_results", {})
 
-    duration = trip_details.get(
-        "duration",
-        ""
-    )
+    budget = trip_details.get("budget", "")
 
-    budget = trip_details.get(
-        "budget",
-        ""
-    )
+    result = {
+        "success": True,
+        "user_budget": budget,
+        "flight_cost": None,
+        "flight_currency": "",
+        "hotel_cost_per_night": None,
+        "hotel_currency": "",
+        "estimated_total": None,
+        "total_currency": "",
+        "within_budget": None,
+        "limitations": []
+    }
 
-    travel_style = trip_details.get(
-        "travel_style",
-        ""
-    )
-
-    flight_results = state.get(
-        "flight_results",
-        ""
-    )
-
-    hotel_results = state.get(
-        "hotel_results",
-        ""
-    )
-
-    review = []
-
-    review.append("=== BUDGET REVIEW ===\n")
-
-    review.append(
-        f"Destination: {destination or 'Not Provided'}"
-    )
-
-    review.append(
-        f"Duration: {duration or 'Not Provided'}"
-    )
-
-    review.append(
-        f"Budget: {budget or 'Not Provided'}"
-    )
-
-    review.append(
-        f"Travel Style: {travel_style or 'Not Provided'}"
-    )
-
-    review.append("\nTrip Assessment")
-
-    # ==========================================================
-    # WHY:
-    # Budget analysis is useless if budget
-    # itself is missing.
-    # ==========================================================
-    if not budget:
-
-        review.append(
-            "- No budget has been provided."
-        )
-
-        review.append(
-            "- Please specify a budget for meaningful cost analysis."
-        )
-
-        budget_results = "\n".join(review)
-
-        return {
-            "budget_results": budget_results,
-            "messages": [
-                AIMessage(
-                    content="Budget analysis generated."
-                )
-            ]
-        }
-
-    review.append(
-        "- Budget information has been captured."
-    )
-
-    # ==========================================================
-    # WHY:
-    # Longer trips generally increase
-    # accommodation, food and transport costs.
-    # ==========================================================
-    if duration:
-
-        review.append(
-            "- Trip duration is available and should be considered when estimating overall trip expenses."
-        )
-
-    else:
-
-        review.append(
-            "- Trip duration was not provided."
-        )
-
-        review.append(
-            "- Total trip cost cannot be estimated accurately without a duration."
-        )
-
-    # ==========================================================
-    # Flight Analysis
-    # ==========================================================
-    if not flight_results:
-
-        review.append(
-            "- Flight information is unavailable."
-        )
-
-    elif (
-        "No flights found" in flight_results
-        or "Unable to find airport code"
-        in flight_results
-        or "Flight API error"
-        in flight_results
+    # Use the cheapest returned flight option.
+    if (
+        isinstance(flight_results, dict)
+        and flight_results.get("success")
     ):
+        flights = flight_results.get("flights", [])
 
-        review.append(
-            "- Flight costs cannot currently be estimated because no flight information was found."
-        )
+        prices = [
+            flight.get("price")
+            for flight in flights
+            if isinstance(flight.get("price"), (int, float))
+        ]
 
-    else:
-
-        review.append(
-            "- Flight options are available and should be included in final trip budgeting."
-        )
-
-    # ==========================================================
-    # Hotel Analysis
-    # ==========================================================
-    if hotel_results:
-
-        review.append(
-            "- Hotel recommendations are available."
-        )
-
-        review.append(
-            "- Accommodation will likely be one of the largest trip expenses."
-        )
-
-    else:
-
-        review.append(
-            "- Hotel information is unavailable."
-        )
-
-    # ==========================================================
-    # Travel Style Review
-    # ==========================================================
-    if travel_style:
-
-        style = travel_style.lower()
-
-        if style == "luxury":
-
-            review.append(
-                "- Luxury travel typically increases accommodation and activity expenses."
+        if prices:
+            result["flight_cost"] = min(prices)
+            result["flight_currency"] = flight_results.get(
+                "currency",
+                ""
             )
 
-        elif style == "budget":
+    # Use the lowest available hotel price.
+    if (
+        isinstance(hotel_results, dict)
+        and hotel_results.get("success")
+    ):
+        hotels = hotel_results.get("hotels", [])
 
-            review.append(
-                "- Budget travel can significantly reduce overall trip costs."
+        hotel_prices = [
+            hotel.get("price_min")
+            for hotel in hotels
+            if isinstance(
+                hotel.get("price_min"),
+                (int, float)
+            )
+        ]
+
+        if hotel_prices:
+            result["hotel_cost_per_night"] = min(
+                hotel_prices
             )
 
-        elif style == "family":
-
-            review.append(
-                "- Family travel may increase accommodation and transportation costs."
+            cheapest_hotel = min(
+                hotels,
+                key=lambda hotel: (
+                    hotel.get("price_min")
+                    if isinstance(
+                        hotel.get("price_min"),
+                        (int, float)
+                    )
+                    else float("inf")
+                )
             )
 
-    # ==========================================================
-    # Budget Recommendations
-    # ==========================================================
-    review.append("\nRecommendations")
+            result["hotel_currency"] = (
+                cheapest_hotel.get("currency", "")
+            )
 
-    review.append(
-        "- Reserve 10% to 15% of the budget as an emergency fund."
-    )
+    # Never combine prices with different currencies.
+    if (
+        result["flight_cost"] is not None
+        and result["hotel_cost_per_night"] is not None
+    ):
+        if (
+            result["flight_currency"]
+            == result["hotel_currency"]
+        ):
+            result["limitations"].append(
+                "Hotel duration is required before a "
+                "complete accommodation cost can be calculated."
+            )
+        else:
+            result["limitations"].append(
+                "Flight and hotel prices use different "
+                "currencies, so they were not combined."
+            )
 
-    review.append(
-        "- Include accommodation, food, local transport and activity costs."
-    )
+    if result["flight_cost"] is None:
+        result["limitations"].append(
+            "Flight cost is unavailable."
+        )
 
-    review.append(
-        "- Keep a contingency amount for unexpected expenses."
-    )
+    if result["hotel_cost_per_night"] is None:
+        result["limitations"].append(
+            "Hotel cost is unavailable."
+        )
 
-    review.append(
-        "- Verify foreign exchange requirements before international travel."
-    )
-
-    review.append(
-        "- Purchase travel insurance when travelling internationally."
-    )
-
-    budget_results = "\n".join(review)
+    if not budget:
+        result["limitations"].append(
+            "No user budget was provided, so affordability "
+            "cannot be evaluated."
+        )
 
     return {
-        "budget_results": budget_results,
+        "budget_results": result,
         "messages": [
             AIMessage(
-                content="Budget analysis generated."
+                content="Budget calculation completed."
             )
         ]
     }
