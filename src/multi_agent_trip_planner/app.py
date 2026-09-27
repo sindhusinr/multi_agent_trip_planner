@@ -1,11 +1,13 @@
 import os
 import uuid
-
+import asyncio
+import traceback
+import selectors
 from dotenv import load_dotenv
-from psycopg import Connection
+from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 
-from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
 
 from multi_agent_trip_planner.graph.travel_graph import build_graph
@@ -14,22 +16,20 @@ from multi_agent_trip_planner.graph.travel_graph import build_graph
 load_dotenv()
 
 
-def run_graph(graph, graph_input, config):
+async def run_graph(graph, graph_input, config):
     """
-    Run the graph and handle HITL interruptions.
+    Run the graph asynchronously and handle HITL interruptions.
     """
 
-    result = graph.invoke(
+    result = await graph.ainvoke(
         graph_input,
         config=config
     )
 
-    # Continue until all HITL interruptions are resolved.
+    # Resume the same graph after HITL input.
     while "__interrupt__" in result:
 
-        interrupts = result["__interrupt__"]
-
-        interrupt_data = interrupts[0].value
+        interrupt_data = result["__interrupt__"][0].value
 
         question = interrupt_data.get(
             "question",
@@ -40,8 +40,7 @@ def run_graph(graph, graph_input, config):
 
         user_answer = input("You: ").strip()
 
-        # Resume the same interrupted graph execution.
-        result = graph.invoke(
+        result = await graph.ainvoke(
             Command(resume=user_answer),
             config=config
         )
@@ -49,7 +48,7 @@ def run_graph(graph, graph_input, config):
     return result
 
 
-def main():
+async def main():
 
     database_url = os.getenv("DATABASE_URL")
 
@@ -58,21 +57,21 @@ def main():
             "DATABASE_URL is not configured in the .env file."
         )
 
-    # One PostgreSQL connection is used by the LangGraph checkpointer.
-    with Connection.connect(
+    # Async PostgreSQL connection for async LangGraph execution.
+    async with await AsyncConnection.connect(
         database_url,
         autocommit=True,
         row_factory=dict_row
     ) as connection:
 
-        checkpointer = PostgresSaver(connection)
+        checkpointer = AsyncPostgresSaver(connection)
 
-        # Run once when initializing the checkpoint tables.
-        checkpointer.setup()
+        # Create checkpoint tables if required.
+        await checkpointer.setup()
 
         graph = build_graph(checkpointer)
 
-        # One thread represents one continuous conversation.
+        # Same thread is used for the complete CLI conversation.
         thread_id = str(uuid.uuid4())
 
         config = {
@@ -103,7 +102,7 @@ def main():
             }
 
             try:
-                result = run_graph(
+                result = await run_graph(
                     graph,
                     graph_input,
                     config
@@ -126,8 +125,21 @@ def main():
                     )
 
             except Exception as e:
-                print(f"\nError: {e}\n")
+
+                print("\n========== ERROR ==========")
+                print("ERROR TYPE:", type(e).__name__)
+                print("ERROR:", repr(e))
+
+                print("\nFULL TRACEBACK:")
+                traceback.print_exc()
+
+                print("===========================\n")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(
+        main(),
+        loop_factory=lambda: asyncio.SelectorEventLoop(
+            selectors.SelectSelector()
+        )
+    )

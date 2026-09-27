@@ -25,7 +25,7 @@ FIELD_QUESTIONS = {
     "origin": "What city are you departing from?",
     "destination": "What is your destination?",
     "primary_city": "Which city are you traveling to?",
-    "departure_date": "What is your departure date? Please use YYYY-MM-DD format."
+    "departure_date": "What is your departure date? Please use DD/MM/YYYY format."
 }
 
 

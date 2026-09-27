@@ -3,112 +3,70 @@ from langchain_core.messages import AIMessage
 from multi_agent_trip_planner.tools.flight_tool import (
     search_flights
 )
-from multi_agent_trip_planner.tools.airport_tool import (
-    get_iata
-)
 
 
-def flight_agent(state: dict) -> dict:
+async def flight_agent(state: dict) -> dict:
+    """
+    Search live flight offers using validated trip details.
+    """
 
-    print(">>> FLIGHT AGENT")
+    print("\n>>> FLIGHT AGENT")
 
     trip_details = state.get(
         "trip_details",
         {}
     )
 
-    # Departure location
     origin = trip_details.get(
         "origin",
         ""
     )
 
-    # Prefer primary_city for flight searches
-    destination = (
-        trip_details.get(
-            "primary_city",
-            ""
-        )
-        or trip_details.get(
-            "destination",
-            ""
-        )
+    destination = trip_details.get(
+        "destination",
+        ""
     )
 
-    # Origin is required
-    if not origin:
-        return {
-            "flight_results": (
-                "Please provide your departure city."
-            ),
-            "messages": [
-                AIMessage(
-                    content="Origin city missing."
-                )
-            ]
-        }
+    departure_date = trip_details.get(
+        "departure_date",
+        ""
+    )
 
-    # Destination is required
-    if not destination:
-        return {
-            "flight_results": (
-                "Please provide your destination."
-            ),
-            "messages": [
-                AIMessage(
-                    content="Destination missing."
-                )
-            ]
-        }
+    return_date = trip_details.get(
+        "return_date",
+        ""
+    )
 
-    origin_iata = get_iata(origin)
-    destination_iata = get_iata(destination)
+    adults = trip_details.get(
+        "adults",
+        1
+    )
 
-    # Validate origin airport
-    if not origin_iata:
-        return {
-            "flight_results": (
-                f"Unable to find airport code "
-                f"for '{origin}'."
-            ),
-            "messages": [
-                AIMessage(
-                    content="Origin airport not found."
-                )
-            ]
-        }
-
-    # Validate destination airport
-    if not destination_iata:
-        return {
-            "flight_results": (
-                f"Unable to find airport code "
-                f"for '{destination}'."
-            ),
-            "messages": [
-                AIMessage(
-                    content="Destination airport not found."
-                )
-            ]
-        }
+    cabin_class = trip_details.get(
+        "cabin_class",
+        "economy"
+    )
 
     print(
-        f"\nSearching flights: "
-        f"{origin_iata} -> {destination_iata}"
+        f"Searching flights: "
+        f"{origin} -> {destination} "
+        f"on {departure_date}"
     )
 
-    flight_results = search_flights(
-        origin_iata,
-        destination_iata
+    flight_results = await search_flights(
+        origin=origin,
+        destination=destination,
+        departure_date=departure_date,
+        adults=adults,
+        cabin_class=cabin_class,
+        return_date=return_date
     )
 
     return {
         "flight_results": flight_results,
         "messages": [
             AIMessage(
-                content=(
-                    "Flight recommendations generated."
-                )
+                content="Flight search completed."
             )
         ]
     }

@@ -1,130 +1,177 @@
-"""
-Flight search utilities.
+import json
 
-This module is responsible for:
-1. Calling AviationStack
-2. Filtering flights by route
-3. Formatting flight results
-4. Returning travel-friendly flight data
-
-Used by:
-- Flight Agent
-"""
-
-import os
-import requests
-from dotenv import load_dotenv
-
-load_dotenv()
-
-AVIATIONSTACK_API_KEY = os.getenv("AVIATIONSTACK_API_KEY")
-
-AVIATIONSTACK_BASE_URL = os.getenv(
-    "AVIATIONSTACK_BASE_URL",
-    "https://api.aviationstack.com/v1/flights"
-)
+from multi_agent_trip_planner.mcp.mcp_client import get_mcp_tools
 
 
-def format_flight(flight: dict) -> str:
+CABIN_CLASS_MAP = {
+    "economy": "M",
+    "premium economy": "W",
+    "business": "C",
+    "first": "F"
+}
+
+
+def normalize_flight(itinerary: dict) -> dict:
     """
-    Convert raw AviationStack response
-    into readable text.
+    Convert Kiwi itinerary into our internal flight format.
     """
 
-    airline = (
-        flight.get("airline", {})
-        .get("name", "Unknown Airline")
-    )
+    outbound = itinerary.get("outbound", {})
+    segments = outbound.get("segments", [])
 
-    departure_airport = (
-        flight.get("departure", {})
-        .get("airport", "Unknown")
-    )
+    first_segment = segments[0] if segments else {}
+    last_segment = segments[-1] if segments else {}
 
-    departure_iata = (
-        flight.get("departure", {})
-        .get("iata", "N/A")
-    )
+    return {
+        "airline": first_segment.get("carrierName", ""),
+        "flight_number": first_segment.get("flightNumber", ""),
 
-    arrival_airport = (
-        flight.get("arrival", {})
-        .get("airport", "Unknown")
-    )
+        "departure_airport": outbound.get("from", ""),
+        "arrival_airport": outbound.get("to", ""),
 
-    arrival_iata = (
-        flight.get("arrival", {})
-        .get("iata", "N/A")
-    )
+        "departure_city": first_segment.get("fromCity", ""),
+        "arrival_city": last_segment.get("toCity", ""),
 
-    status = flight.get(
-        "flight_status",
-        "Unknown"
-    )
+        "departure_time": outbound.get("departureTime", ""),
+        "arrival_time": outbound.get("arrivalTime", ""),
 
-    return (
-        f"Airline: {airline}\n"
-        f"Departure: {departure_airport} ({departure_iata})\n"
-        f"Arrival: {arrival_airport} ({arrival_iata})\n"
-        f"Status: {status}"
-    )
+        "duration_seconds": outbound.get(
+            "durationSeconds"
+        ),
 
+        "stops": outbound.get("stops", 0),
 
-def search_flights(
-    origin_iata: str,
-    destination_iata: str,
-    limit: int = 5
-) -> str:
-    """
-    Search flights between two airports.
+        "cabin_class": outbound.get(
+            "cabinClass",
+            ""
+        ),
 
-    Example:
+        "price": itinerary.get("price"),
+        "price_formatted": itinerary.get(
+            "priceFormatted",
+            ""
+        ),
 
-    search_flights("MAA", "NRT")
-    """
+        "booking_url": itinerary.get(
+            "bookingUrl",
+            ""
+        ),
 
-    if not AVIATIONSTACK_API_KEY:
-        return "AVIATIONSTACK_API_KEY not configured."
-
-    params = {
-        "access_key": AVIATIONSTACK_API_KEY,
-        "dep_iata": origin_iata,
-        "arr_iata": destination_iata,
-        "limit": limit
+        "baggage": itinerary.get(
+            "baggage",
+            {}
+        )
     }
 
+
+async def search_flights(
+    origin: str,
+    destination: str,
+    departure_date: str,
+    adults: int = 1,
+    cabin_class: str = "economy",
+    return_date: str = ""
+) -> dict:
+    """
+    Search Kiwi MCP and return normalized flight results.
+    """
+
     try:
-        response = requests.get(
-            AVIATIONSTACK_BASE_URL,
-            params=params,
-            timeout=30
+        tools = await get_mcp_tools("kiwi")
+
+        flight_tool = next(
+            (
+                tool for tool in tools
+                if tool.name == "search-flight"
+            ),
+            None
         )
 
-        response.raise_for_status()
+        if not flight_tool:
+            return {
+                "success": False,
+                "provider": "Kiwi.com",
+                "error": "Kiwi search-flight tool not found."
+            }
 
-        data = response.json()
+        arguments = {
+            "flyFrom": origin,
+            "flyTo": destination,
+            "departureDate": departure_date,
+            "adults": adults,
+            "currency": "INR",
+            "locale": "en",
+            "sort": "price"
+        }
 
-        flights = data.get("data", [])
-
-        print("\n=== AVIATIONSTACK ROUTE SEARCH ===")
-        print(
-            f"Searching: "
-            f"{origin_iata} -> {destination_iata}"
+        cabin_code = CABIN_CLASS_MAP.get(
+            cabin_class.lower()
         )
 
-        if flights:
-            print("\n=== FIRST MATCH ===")
-            print(flights[0])
+        if cabin_code:
+            arguments["cabinClass"] = cabin_code
+
+        if return_date:
+            arguments["returnDate"] = return_date
+
+        # Call Kiwi Remote MCP.
+        result = await flight_tool.ainvoke(arguments)
+
+        # MCP returns a list containing a text block.
+        if not result:
+            return {
+                "success": False,
+                "provider": "Kiwi.com",
+                "error": "No response received from Kiwi."
+            }
+
+        text_content = result[0].get(
+            "text",
+            "{}"
+        )
+
+        kiwi_data = json.loads(text_content)
+
+        itineraries = kiwi_data.get(
+            "itineraries",
+            []
+        )
+
+        # Keep only top 5 results to reduce downstream tokens.
+        flights = [
+            normalize_flight(itinerary)
+            for itinerary in itineraries[:5]
+        ]
+
+        return {
+            "success": True,
+            "provider": "Kiwi.com",
+
+            "origin": origin,
+            "destination": destination,
+
+            "departure_date": departure_date,
+            "return_date": return_date,
+
+            "adults": adults,
+            "cabin_class": cabin_class,
+
+            "currency": kiwi_data.get(
+                "currency",
+                "INR"
+            ),
+
+            "total_results": kiwi_data.get(
+                "resultsCount",
+                len(itineraries)
+            ),
+
+            "flights": flights
+        }
 
     except Exception as e:
-        return f"Flight API error: {e}"
-
-    if not flights:
-        return (
-            f"No flights found for route "
-            f"{origin_iata} -> {destination_iata}"
-        )
-
-    return "\n\n".join(
-        format_flight(flight)
-        for flight in flights[:limit]
-    )
+        return {
+            "success": False,
+            "provider": "Kiwi.com",
+            "error": str(e)
+        }

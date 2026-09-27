@@ -1,6 +1,4 @@
 from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.postgres import PostgresSaver
-
 from multi_agent_trip_planner.graph.state import TravelState
 from multi_agent_trip_planner.graph.routing import (
     route_after_guardrail,
@@ -22,7 +20,7 @@ from multi_agent_trip_planner.agents.final_response_agent import (
 )
 
 
-def build_graph(checkpointer: PostgresSaver):
+def build_graph(checkpointer):
     """
     Build the multi-agent travel planning graph.
     """
