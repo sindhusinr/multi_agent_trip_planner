@@ -6,19 +6,32 @@ from multi_agent_trip_planner.mcp.mcp_client import (
 
 
 async def main():
-    print("Starting Kiwi MCP test...")
 
-    tools = await get_mcp_tools("kiwi")
+    tools = await get_mcp_tools("vistalink")
 
-    print(f"Tools found: {len(tools)}")
-    print("\n=== KIWI MCP TOOLS ===")
+    hotel_tool = next(
+        (
+            tool for tool in tools
+            if tool.name == "search_hotels"
+        ),
+        None
+    )
 
-    for tool in tools:
-        print("\nTool:", tool.name)
-        print("Description:", tool.description)
-        print("Schema:", tool.args_schema)
-        print("-" * 60)
+    if not hotel_tool:
+        print("search_hotels tool not found.")
+        return
+
+    result = await hotel_tool.ainvoke({
+        "city": "Mumbai",
+        "guests": 1,
+        "currency": "INR",
+        "limit": 5,
+        "include_rates": False
+    })
+
+    print("\n>>> RAW VISTALINK HOTEL RESULT")
+    print("TYPE:", type(result))
+    print("RESULT:", result)
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())

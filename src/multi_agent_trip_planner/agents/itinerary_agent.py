@@ -14,27 +14,20 @@ llm = ChatGroq(
 
 def itinerary_agent(state: dict) -> dict:
     """
-    Creates a complete itinerary using
-    available trip details and agent outputs.
+    Create an activity itinerary for the destination.
     """
+
+    print("\n>>> ITINERARY AGENT")
 
     trip_details = state.get(
         "trip_details",
         {}
     )
 
-    flight_results = state.get(
-        "flight_results",
-        ""
-    )
-
-    hotel_results = state.get(
-        "hotel_results",
-        ""
-    )
-
-    weather_results = state.get(
-        "weather_results",
+    destination = trip_details.get(
+        "primary_city"
+    ) or trip_details.get(
+        "destination",
         ""
     )
 
@@ -43,175 +36,58 @@ def itinerary_agent(state: dict) -> dict:
         ""
     )
 
-    # =========================================================================
-    # WHY:
-    # We do not want the itinerary model to guess
-    # airlines, airports, routes or flight durations
-    # when Flight Agent failed.
-    # =========================================================================
-    flight_available = True
-
-    if (
-        not flight_results
-        or "No flights found" in flight_results
-        or "Unable to find airport code" in flight_results
-        or "Flight API error" in flight_results
-    ):
-        flight_available = False
+    travel_style = trip_details.get(
+        "travel_style",
+        ""
+    )
 
     prompt = f"""
-Create a travel itinerary.
+Create a travel activity itinerary.
 
-Trip Details:
+Destination:
+{destination}
 
-{trip_details}
-
-User Request:
-
-{state["user_query"]}
-
-Flight Available:
-
-{flight_available}
-
-Duration Value:
-
+Duration:
 {duration}
 
-Flight Information:
+Travel Style:
+{travel_style}
 
-{flight_results}
+User Request:
+{state.get("user_query", "")}
 
-Hotel Information:
+Your responsibility is ONLY itinerary planning.
 
-{hotel_results}
+Rules:
 
-Weather Information:
+- Focus only on activities, attractions,
+  sightseeing and experiences.
+- Do not recommend flights.
+- Do not recommend airlines.
+- Do not provide flight schedules or prices.
+- Do not recommend hotels.
+- Do not provide hotel prices.
+- Do not calculate trip budget.
+- Do not provide weather forecasts.
+- Do not invent bookings or reservations.
 
-{weather_results}
+If Duration is provided:
 
-Transportation Rules:
+- Create a day-by-day itinerary.
+- Match the itinerary to the provided duration.
+- Organize activities into morning,
+  afternoon and evening where appropriate.
+- Keep nearby activities together when possible.
 
-- Do not assume flights.
-- Do not invent origin cities.
-- Do not invent destination cities.
-- Use only information explicitly provided.
-- If destination is a country,
-  use primary_city.
+If Duration is not provided:
 
-Flight Rules:
+- Do not assume a number of days.
+- Do not create Day 1, Day 2, etc.
+- Provide a concise list of suggested
+  activities for the destination.
 
-IF Flight Available = False
-
-THEN:
-
-- State:
-  "Flight information is currently unavailable."
-
-- Do NOT mention:
-  - airlines
-  - airports
-  - airport transfers
-  - flight durations
-  - layovers
-  - ticket prices
-  - suggested flight routes
-
-- Do NOT mention:
-  Narita
-  Haneda
-  Singapore Airlines
-  Emirates
-  Air India
-  ANA
-  JAL
-
-- Do NOT create transportation
-  recommendations related to flights.
-
-IF Flight Available = True
-
-THEN:
-
-- Use only information contained
-  in Flight Information.
-- Do not invent additional
-  flight details.
-
-Duration Rules:
-
-IF Duration Value is empty
-
-THEN:
-
-- Do NOT create:
-  Day 1
-  Day 2
-  Day 3
-  Day 4
-  Day 5
-
-- Do NOT assume:
-  3 days
-  5 days
-  7 days
-  1 week
-
-- Create:
-
-  Suggested Activities
-  Morning Ideas
-  Afternoon Ideas
-  Evening Ideas
-
-- Clearly state:
-
-  "Trip duration was not provided."
-
-IF Duration Value is present
-
-THEN:
-
-- Create a day-by-day itinerary
-  matching the provided duration.
-
-Hotel Rules:
-
-- Use hotels only from
-  Hotel Information.
-- Never invent hotels.
-- Never invent hotel pricing.
-
-Weather Rules:
-
-- Use weather only from
-  Weather Information.
-- Never invent forecasts.
-
-Generate:
-
-1. Trip Summary
-2. Transportation Recommendations
-3. Hotel Recommendation
-4. Suggested Activities
-5. Travel Tips
-
-Important:
-
-- Never invent transportation.
-- Never invent routes.
-- Never invent airlines.
-- Never invent airports.
-- Never invent schedules.
-- Never invent prices.
-- Never invent weather.
-- Never invent hotels.
-
-- If information is unavailable,
-  explicitly say it is unavailable.
-
-Keep the response realistic,
-practical and easy to read.
+Keep the itinerary practical,
+concise and easy to read.
 """
 
     response = llm.invoke(

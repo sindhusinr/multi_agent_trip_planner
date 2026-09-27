@@ -1,75 +1,62 @@
 import json
 
-from multi_agent_trip_planner.mcp.mcp_client import (
-    get_mcp_tools
-)
+from multi_agent_trip_planner.mcp.mcp_client import get_mcp_tools
 
 
-async def tavily_search(query: str) -> str:
-    """
-    Search Tavily MCP and return a clean
-    summary of hotel recommendations.
-    """
-
-    # Retrieve available MCP tools
-    tools = await get_mcp_tools()
-
-    # Locate the Tavily search tool
-    search_tool = next(
-        tool
-        for tool in tools
-        if tool.name == "tavily_search"
-    )
-
-    # Execute the Tavily search
-    result = await search_tool.ainvoke(
-        {
-            "query": query
-        }
-    )
+async def tavily_search(query: str) -> dict:
+    """Search Tavily MCP and return structured hotel results."""
 
     try:
+        tools = await get_mcp_tools("tavily")
 
-        # Extract the JSON payload
+        search_tool = next(
+            (
+                tool for tool in tools
+                if tool.name == "tavily_search"
+            ),
+            None
+        )
+
+        if not search_tool:
+            return {
+                "success": False,
+                "error": "Tavily search tool not found."
+            }
+
+        result = await search_tool.ainvoke(
+            {"query": query}
+        )
+
+        if not result:
+            return {
+                "success": False,
+                "error": "No response received from Tavily."
+            }
+
+        # MCP returns JSON inside a text block.
         payload = json.loads(
-            result[0]["text"]
+            result[0].get("text", "{}")
         )
 
-        hotel_summaries = []
+        hotels = []
 
-        # Process the top hotel recommendations
-        for item in payload.get(
-            "results",
-            []
-        )[:5]:
+        # Keep top 5 results.
+        for item in payload.get("results", [])[:5]:
+            hotels.append({
+                "name": item.get("title", ""),
+                "description": item.get("content", "")[:300],
+                "url": item.get("url", "")
+            })
 
-            title = item.get(
-                "title",
-                "Unknown Hotel"
-            )
-
-            content = item.get(
-                "content",
-                ""
-            )[:300]
-
-            hotel_summaries.append(
-                f"Hotel: {title}\n"
-                f"Details: {content}"
-            )
-
-        # Return a clean formatted string
-        return "\n\n".join(
-            hotel_summaries
-        )
+        return {
+            "success": True,
+            "provider": "Tavily",
+            "hotels": hotels
+        }
 
     except Exception as e:
-
-        print(
-            f"Tavily parsing error: {e}"
-        )
-
-        return (
-            "Unable to retrieve hotel "
-            "recommendations."
-        )
+        return {
+            "success": False,
+            "provider": "Tavily",
+            "error": str(e)
+        }

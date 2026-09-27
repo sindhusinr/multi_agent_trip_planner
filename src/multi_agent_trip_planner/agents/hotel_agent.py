@@ -1,36 +1,44 @@
-import asyncio
-
 from langchain_core.messages import AIMessage
 
-from multi_agent_trip_planner.tools.tavily_tool import (
-    tavily_search
+from multi_agent_trip_planner.tools.hotel_tool import (
+    search_hotels
 )
 
 
-def hotel_agent(state: dict) -> dict:
+async def hotel_agent(state: dict) -> dict:
+    """Search hotels using validated trip details."""
 
-    destination = (
-        state["trip_details"]
-        .get("destination", "")
+    print("\n>>> HOTEL AGENT")
+
+    trip_details = state.get(
+        "trip_details",
+        {}
     )
 
-    # Build the search query
-    query = (
-        f"Best hotels in {destination}"
+    destination = trip_details.get(
+        "destination",
+        ""
     )
 
-    # Fetch hotel recommendations from Tavily MCP
-    hotels = asyncio.run(
-        tavily_search(query)
+    adults = trip_details.get(
+        "adults",
+        1
+    )
+
+    print(
+        f"Searching hotels in {destination}"
+    )
+
+    hotel_results = await search_hotels(
+        city=destination,
+        guests=adults
     )
 
     return {
-        "hotel_results": hotels,
+        "hotel_results": hotel_results,
         "messages": [
             AIMessage(
-                content=(
-                    "Hotel information generated."
-                )
+                content="Hotel search completed."
             )
         ]
     }
