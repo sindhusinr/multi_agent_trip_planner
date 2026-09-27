@@ -25,3 +25,5 @@ langchain-mcp-adapters
 mcp
 nest_asyncio
 streamlit
+mem0ai
+sentence-transformers

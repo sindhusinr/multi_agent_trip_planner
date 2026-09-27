@@ -1,37 +1,18 @@
-import asyncio
-
-from multi_agent_trip_planner.mcp.mcp_client import (
-    get_mcp_tools
+from multi_agent_trip_planner.memory.long_term import (
+    add_user_memory,
+    search_user_memories
 )
 
+user_id = "test_user"
 
-async def main():
+add_user_memory(
+    "I prefer economy flights and budget hotels.",
+    user_id
+)
 
-    tools = await get_mcp_tools("vistalink")
+results = search_user_memories(
+    "What are my travel preferences?",
+    user_id
+)
 
-    hotel_tool = next(
-        (
-            tool for tool in tools
-            if tool.name == "search_hotels"
-        ),
-        None
-    )
-
-    if not hotel_tool:
-        print("search_hotels tool not found.")
-        return
-
-    result = await hotel_tool.ainvoke({
-        "city": "Mumbai",
-        "guests": 1,
-        "currency": "INR",
-        "limit": 5,
-        "include_rates": False
-    })
-
-    print("\n>>> RAW VISTALINK HOTEL RESULT")
-    print("TYPE:", type(result))
-    print("RESULT:", result)
-
-
-asyncio.run(main())
+print(results)

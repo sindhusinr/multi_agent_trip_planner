@@ -1,24 +1,19 @@
-import os
 import uuid
 import asyncio
 import traceback
 import selectors
-from dotenv import load_dotenv
-from psycopg import AsyncConnection
-from psycopg.rows import dict_row
 
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.types import Command
 
 from multi_agent_trip_planner.graph.travel_graph import build_graph
-
-
-load_dotenv()
+from multi_agent_trip_planner.memory.checkpoint import (
+    create_postgres_checkpointer
+)
 
 
 async def run_graph(graph, graph_input, config):
     """
-    Run the graph asynchronously and handle HITL interruptions.
+    Run the graph and handle HITL interruptions.
     """
 
     result = await graph.ainvoke(
@@ -26,10 +21,11 @@ async def run_graph(graph, graph_input, config):
         config=config
     )
 
-    # Resume the same graph after HITL input.
     while "__interrupt__" in result:
 
-        interrupt_data = result["__interrupt__"][0].value
+        interrupt_data = result[
+            "__interrupt__"
+        ][0].value
 
         question = interrupt_data.get(
             "question",
@@ -50,28 +46,14 @@ async def run_graph(graph, graph_input, config):
 
 async def main():
 
-    database_url = os.getenv("DATABASE_URL")
+    connection, checkpointer = (
+        await create_postgres_checkpointer()
+    )
 
-    if not database_url:
-        raise ValueError(
-            "DATABASE_URL is not configured in the .env file."
-        )
-
-    # Async PostgreSQL connection for async LangGraph execution.
-    async with await AsyncConnection.connect(
-        database_url,
-        autocommit=True,
-        row_factory=dict_row
-    ) as connection:
-
-        checkpointer = AsyncPostgresSaver(connection)
-
-        # Create checkpoint tables if required.
-        await checkpointer.setup()
-
+    try:
         graph = build_graph(checkpointer)
 
-        # Same thread is used for the complete CLI conversation.
+        # One thread for the complete CLI conversation.
         thread_id = str(uuid.uuid4())
 
         config = {
@@ -115,7 +97,8 @@ async def main():
 
                 if final_response:
                     print(
-                        f"\nAssistant:\n{final_response}\n"
+                        f"\nAssistant:\n"
+                        f"{final_response}\n"
                     )
 
                 else:
@@ -127,13 +110,19 @@ async def main():
             except Exception as e:
 
                 print("\n========== ERROR ==========")
-                print("ERROR TYPE:", type(e).__name__)
+                print(
+                    "ERROR TYPE:",
+                    type(e).__name__
+                )
                 print("ERROR:", repr(e))
 
                 print("\nFULL TRACEBACK:")
                 traceback.print_exc()
 
                 print("===========================\n")
+
+    finally:
+        await connection.close()
 
 
 if __name__ == "__main__":
