@@ -43,7 +43,9 @@ llm = ChatGroq(
 )
 
 # Prevents raw/malformed JSON from reaching graph routing logic.
-structured_llm = llm.with_structured_output(SupervisorOutput)
+structured_llm = llm.with_structured_output(
+    SupervisorOutput
+)
 
 FALLBACK_AGENTS = [
     "hotel_agent",
@@ -60,6 +62,9 @@ def supervisor_agent(state: dict) -> dict:
     # Existing values are preserved across conversation turns.
     current_trip = state.get("trip_details", {})
 
+    # Relevant long-term preferences retrieved from Mem0.
+    user_memories = state.get("user_memories", [])
+
     prompt = f"""
 You are the supervisor of a multi-agent travel planning system.
 
@@ -75,6 +80,21 @@ CURRENT TRIP DETAILS:
 
 {json.dumps(current_trip, indent=2)}
 
+LONG-TERM USER PREFERENCES:
+
+{json.dumps(user_memories, indent=2)}
+
+MEMORY RULES:
+
+- Use long-term preferences only when relevant to the current request.
+- The current user query always has higher priority than memory.
+- Never override an explicit value from the current user query with memory.
+- Use remembered preferences as defaults only when the current request
+  does not specify that preference.
+- Do not treat remembered preferences as current-trip facts such as
+  destination, dates, duration or budget.
+- Do not invent preferences that are not present in memory.
+
 USER QUERY:
 
 {state["user_query"]}
@@ -89,7 +109,10 @@ TASKS:
 
 3. Preserve the meaning of the existing trip.
 
-4. Select only the agents required for the user's current request.
+4. Use relevant long-term preferences when the current request does not
+   explicitly override them.
+
+5. Select only the agents required for the user's current request.
 
 TRIP DETAILS:
 
@@ -113,6 +136,7 @@ TRIP UPDATE RULES:
 - Do not invent missing trip information.
 - Values not provided in the current request may remain empty.
 - Existing values are preserved by the application after extraction.
+- Relevant long-term preferences may provide preference-based defaults.
 - Never leave primary_city empty when destination is known.
 - If destination is a city, normally use it as primary_city.
 
@@ -173,8 +197,18 @@ Recognize values such as:
 - business
 - first
 
-Only extract cabin_class when the user provides it.
-Otherwise leave it empty.
+- If the current user query explicitly provides cabin class,
+  always use that value.
+- Otherwise, a relevant remembered cabin-class preference may be used.
+- If neither the current request nor memory provides a cabin preference,
+  leave cabin_class empty.
+
+TRAVEL STYLE RULES:
+
+- If the current user query explicitly provides a travel style,
+  always use that value.
+- Otherwise, a relevant remembered travel-style preference may be used.
+- Do not invent a travel style.
 
 FLIGHT AGENT RULES:
 
@@ -224,6 +258,7 @@ IMPORTANT:
 - Missing required fields must not prevent selection of an agent
   that the user actually requested.
 - Missing information will be handled by the validation/HITL layer.
+- Current user instructions always override remembered preferences.
 """
 
     try:
@@ -277,6 +312,8 @@ IMPORTANT:
         return {
             "action": "create_trip",
             "selected_agents": FALLBACK_AGENTS,
-            "supervisor_reasoning": f"Fallback routing used: {e}",
+            "supervisor_reasoning": (
+                f"Fallback routing used: {e}"
+            ),
             "trip_details": current_trip
         }
