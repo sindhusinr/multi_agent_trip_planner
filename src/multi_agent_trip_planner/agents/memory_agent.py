@@ -53,10 +53,11 @@ def memory_retrieval_agent(state: dict) -> dict:
         if item.get("memory")
     ]
 
+    print("Retrieved memories:", memories)
+
     return {
         "user_memories": memories[:5]
     }
-
 
 def memory_extraction_agent(state: dict) -> dict:
     """
@@ -108,6 +109,9 @@ Each memory must be a short standalone statement.
     result = memory_llm.invoke(
         [HumanMessage(content=prompt)]
     )
+
+    # Debug: show what the LLM decided is worth remembering.
+    print("Extracted memories:", result.memories)
 
     for memory_text in result.memories:
         add_user_memory(

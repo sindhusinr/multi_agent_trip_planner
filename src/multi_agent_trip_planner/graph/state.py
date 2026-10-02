@@ -9,6 +9,10 @@ class TravelState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], operator.add]
     user_query: str
 
+    # User identity and long-term memory.
+    user_id: str
+    user_memories: list[str]
+
     # Guardrail state.
     allowed: bool
     guardrail_reason: str

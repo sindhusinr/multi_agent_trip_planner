@@ -53,6 +53,9 @@ async def main():
     try:
         graph = build_graph(checkpointer)
 
+        # Stable user identity for long-term memory.
+        user_id = "test_user"
+
         # One thread for the complete CLI conversation.
         thread_id = str(uuid.uuid4())
 
@@ -80,7 +83,8 @@ async def main():
                 continue
 
             graph_input = {
-                "user_query": user_query
+                "user_query": user_query,
+                "user_id": user_id
             }
 
             try:
