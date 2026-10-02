@@ -1,6 +1,7 @@
 import json
 
 from multi_agent_trip_planner.mcp.mcp_client import get_mcp_tools
+from multi_agent_trip_planner.utils.reliability import async_retry
 
 
 CABIN_CLASS_MAP = {
@@ -115,7 +116,11 @@ async def search_flights(
             arguments["returnDate"] = return_date
 
         # Call Kiwi Remote MCP.
-        result = await flight_tool.ainvoke(arguments)
+        result = await async_retry(
+        lambda: flight_tool.ainvoke(arguments),
+        attempts=3,
+        timeout=20
+        )
 
         # MCP returns a list containing a text block.
         if not result:

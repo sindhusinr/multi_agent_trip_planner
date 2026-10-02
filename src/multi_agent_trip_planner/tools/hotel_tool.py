@@ -1,9 +1,7 @@
 import json
 
-from multi_agent_trip_planner.mcp.mcp_client import (
-    get_mcp_tools
-)
-
+from multi_agent_trip_planner.mcp.mcp_client import get_mcp_tools
+from multi_agent_trip_planner.utils.reliability import async_retry
 
 def normalize_hotel(hotel: dict) -> dict:
     """Convert VistaLink hotel into our internal format."""
@@ -74,9 +72,11 @@ async def search_hotels(
         if check_out:
             arguments["check_out"] = check_out
 
-        result = await hotel_tool.ainvoke(
-            arguments
-        )
+        result = await async_retry(
+    lambda: hotel_tool.ainvoke(arguments),
+    attempts=3,
+    timeout=20
+)
 
         if not result:
             return {

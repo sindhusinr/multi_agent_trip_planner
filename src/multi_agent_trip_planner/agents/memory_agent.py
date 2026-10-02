@@ -59,6 +59,7 @@ def memory_retrieval_agent(state: dict) -> dict:
         "user_memories": memories[:5]
     }
 
+
 def memory_extraction_agent(state: dict) -> dict:
     """
     Store only stable travel preferences.
@@ -106,17 +107,27 @@ return an empty memories list.
 Each memory must be a short standalone statement.
 """
 
-    result = memory_llm.invoke(
-        [HumanMessage(content=prompt)]
-    )
+    try:
+        result = memory_llm.invoke(
+            [HumanMessage(content=prompt)]
+        )
 
-    # Debug: show what the LLM decided is worth remembering.
-    print("Extracted memories:", result.memories)
+        print(
+            "Extracted memories:",
+            result.memories
+        )
 
-    for memory_text in result.memories:
-        add_user_memory(
-            memory_text,
-            user_id
+        for memory_text in result.memories:
+            add_user_memory(
+                memory_text,
+                user_id
+            )
+
+    except Exception as e:
+        # Memory is non-critical; keep the main workflow running.
+        print(
+            "Memory extraction skipped:",
+            str(e)
         )
 
     return {}
